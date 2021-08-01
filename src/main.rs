@@ -1,3 +1,6 @@
+mod cli;
+
 fn main() {
-    println!("Hello, world!");
+    let cli_options = cli::parse_cli_options().unwrap();
+    println!("Options: {:?}", cli_options);
 }
