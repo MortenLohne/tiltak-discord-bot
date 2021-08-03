@@ -3,8 +3,8 @@ use std::io;
 
 #[derive(Debug, Clone)]
 pub struct CliOptions {
-    aws_function_name: String,
-    discord_token: String,
+    pub aws_function_name: String,
+    pub discord_token: String,
 }
 
 pub fn parse_cli_options() -> io::Result<CliOptions> {
