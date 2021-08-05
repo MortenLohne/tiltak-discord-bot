@@ -1,3 +1,4 @@
+mod aws;
 mod cli;
 
 use pgn_traits::PgnPosition;
@@ -12,7 +13,7 @@ use std::error;
 use tiltak::position::{Move, Position};
 
 #[group]
-#[commands(analyze_tps, ping)]
+#[commands(analyze_tps, ping, analyze_startpos)]
 struct General;
 
 struct Handler;
@@ -50,6 +51,21 @@ async fn main() {
 async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
     println!("Received {} from {}", msg.content, msg.author.name);
     msg.reply(ctx, "Pong!").await?;
+
+    Ok(())
+}
+
+#[command]
+async fn analyze_startpos(ctx: &Context, msg: &Message) -> CommandResult {
+    println!("Received {} from {}", msg.content, msg.author.name);
+    let future = aws::pv_aws("Taik", 6, vec![], 100_000);
+
+    let aws::Output { pv, score } = future.await.unwrap();
+    msg.reply(
+        ctx,
+        format!("{:.1}%: {}", score * 100.0, pv[0].to_string::<6>()),
+    )
+    .await?;
 
     Ok(())
 }
