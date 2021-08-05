@@ -59,41 +59,44 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
     println!("Received {} from {}", msg.content, msg.author.name);
-    let (_, ptn_text) = msg
-        .content
-        .split_once(|ch: char| ch.is_whitespace())
-        .unwrap();
-
-    if let Some(size_line) = ptn_text.lines().find(|line| line.contains("Size")) {
-        match size_line
-            .split_whitespace()
-            .nth(1)
-            .and_then(|r| r.parse::<u64>().ok())
-        {
-            Some(4) => {
-                analyze_ptn_sized::<4>(ctx, msg, ptn_text).await.unwrap();
-                unimplemented!()
+    if let Some((_, ptn_text)) = msg.content.split_once(|ch: char| ch.is_whitespace()) {
+        for line in ptn_text.lines() {
+            println!("{}, {}", line, line.contains("Size"));
+        }
+        if let Some(size_line) = ptn_text.lines().find(|line| line.contains("Size")) {
+            match size_line
+                .split_whitespace()
+                .nth(1)
+                .and_then(|r| r.chars().nth(1).and_then(|r| r.to_digit(10)))
+            {
+                Some(4) => {
+                    analyze_ptn_sized::<4>(ctx, msg, ptn_text).await.unwrap();
+                    unimplemented!()
+                }
+                Some(5) => {
+                    analyze_ptn_sized::<5>(ctx, msg, ptn_text).await.unwrap();
+                    unimplemented!()
+                }
+                Some(6) => {
+                    analyze_ptn_sized::<6>(ctx, msg, ptn_text).await.unwrap();
+                    unimplemented!()
+                }
+                Some(s) => {
+                    msg.reply(ctx, format!("Size {} is unsupported", s)).await?;
+                    Ok(())
+                }
+                None => {
+                    msg.reply(ctx, "Couldn't determine size for ptn").await?;
+                    Ok(())
+                }
             }
-            Some(5) => {
-                analyze_ptn_sized::<5>(ctx, msg, ptn_text).await.unwrap();
-                unimplemented!()
-            }
-            Some(6) => {
-                analyze_ptn_sized::<6>(ctx, msg, ptn_text).await.unwrap();
-                unimplemented!()
-            }
-            Some(s) => {
-                msg.reply(ctx, format!("Size {} is unsupported", s)).await?;
-                Ok(())
-            }
-            None => {
-                msg.reply(ctx, "Couldn't determine size for ptn").await?;
-                Ok(())
-            }
+        } else {
+            msg.reply(ctx, "Couldn't determine size for ptn").await?;
+            Ok(())
         }
     } else {
-        msg.reply(ctx, "Couldn't determine size for ptn").await?;
-        Ok(())
+        msg.reply(ctx, "No PTN provided").await?;
+        Err("No PTN provided".into())
     }
 }
 
@@ -169,7 +172,7 @@ async fn analyze_ptn_sized<const S: usize>(
                     .iter()
                     .map(|ptn_move| ptn_move.mv.clone())
                     .collect();
-                aws::pv_aws("Taik", S, moves, 1_000_000)
+                aws::pv_aws("Taik", S, moves, 100_000)
             });
             // Some trickery to transform Vec<Result<_>> into Result<Vec<_>>
             let results = futures::future::join_all(futures).await;
@@ -180,7 +183,7 @@ async fn analyze_ptn_sized<const S: usize>(
             result_results.map_err(|err| err.into())
         }
         Err(err) => {
-            msg.reply(ctx, "Error while parsing ptn").await?;
+            msg.reply(ctx, err.to_string()).await?;
             Err(err)
         }
     }
