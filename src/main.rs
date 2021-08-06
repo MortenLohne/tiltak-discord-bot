@@ -70,9 +70,9 @@ async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
                 .nth(1)
                 .and_then(|r| r.chars().nth(1).and_then(|r| r.to_digit(10)))
             {
-                Some(4) => analyze_ptn_sized::<4>(ctx, msg, ptn_text).await.unwrap(),
-                Some(5) => analyze_ptn_sized::<5>(ctx, msg, ptn_text).await.unwrap(),
-                Some(6) => analyze_ptn_sized::<6>(ctx, msg, ptn_text).await.unwrap(),
+                Some(4) => analyze_ptn_sized::<4>(ctx, msg, ptn_text).await?,
+                Some(5) => analyze_ptn_sized::<5>(ctx, msg, ptn_text).await?,
+                Some(6) => analyze_ptn_sized::<6>(ctx, msg, ptn_text).await?,
                 Some(s) => {
                     msg.reply(ctx, format!("Size {} is unsupported", s)).await?;
                     return Ok(());
@@ -82,6 +82,7 @@ async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
                     return Ok(());
                 }
             };
+
             msg.reply(ctx, format!("{:?}", analysis)).await?;
             Ok(())
         } else {
@@ -143,11 +144,19 @@ fn analyze_tps_sized<const S: usize>(tps: &str) -> CommandResult<(f32, Vec<Move>
     Ok((tree.mean_action_value(), tree.pv().collect()))
 }
 
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
+struct GameAnalysis {
+    game_tags: Vec<(String, String)>,
+    move_strings: Vec<String>,
+    move_scores: Vec<f32>,
+    pvs: Vec<String>,
+}
+
 async fn analyze_ptn_sized<const S: usize>(
     ctx: &Context,
     msg: &Message,
     ptn: &str,
-) -> Result<Vec<(f32, String)>, Box<dyn Error + Send + Sync>> {
+) -> Result<GameAnalysis, Box<dyn Error + Send + Sync>> {
     match tiltak::ptn::ptn_parser::parse_ptn::<Position<S>>(ptn) {
         Ok(games) => {
             if games.is_empty() {
@@ -176,14 +185,35 @@ async fn analyze_ptn_sized<const S: usize>(
                     msg.reply(ctx, "AWS error").await?;
                     Err("AWS error".into())
                 }
-                Ok(outputs) => Ok(outputs
-                    .iter()
-                    .map(|Output { score, pv }| {
-                        let pv_strings: Vec<String> =
-                            pv.iter().take(3).map(|mv| mv.to_string::<S>()).collect();
-                        (*score, pv_strings.join(" "))
+                Ok(outputs) => {
+                    let move_annotations = annotate_move_scores(
+                        &outputs
+                            .iter()
+                            .map(|output| output.score)
+                            .collect::<Vec<f32>>(),
+                    );
+                    let game_move_strings = game
+                        .moves
+                        .iter()
+                        .zip(move_annotations)
+                        .map(|(mv, annotation)| mv.mv.to_string::<S>() + annotation)
+                        .collect();
+                    let (move_scores, pvs) = outputs
+                        .into_iter()
+                        .map(|Output { score, pv }| {
+                            let pv_strings: Vec<String> =
+                                pv.iter().take(3).map(|mv| mv.to_string::<S>()).collect();
+                            (score, pv_strings.join(" "))
+                        })
+                        .unzip();
+
+                    Ok(GameAnalysis {
+                        game_tags: game.tags.clone(),
+                        move_strings: game_move_strings,
+                        move_scores,
+                        pvs,
                     })
-                    .collect()),
+                }
             }
         }
         Err(err) => {
@@ -191,4 +221,34 @@ async fn analyze_ptn_sized<const S: usize>(
             Err(err)
         }
     }
+}
+
+fn annotate_move_scores(move_scores: &[f32]) -> Vec<&'static str> {
+    move_scores
+        .windows(2)
+        .enumerate()
+        .map(|(i, scores)| {
+            let last_score = scores[0];
+            let score = scores[1];
+
+            let score_loss = if i % 2 == 0 {
+                // The current move was made by white
+                score - last_score
+            } else {
+                last_score - score
+            };
+
+            if score_loss > 0.06 {
+                "!!"
+            } else if score_loss > 0.03 {
+                "!"
+            } else if score_loss > -0.1 {
+                ""
+            } else if score_loss > -0.25 {
+                "?"
+            } else {
+                "??"
+            }
+        })
+        .collect()
 }
