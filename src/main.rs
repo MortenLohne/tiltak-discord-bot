@@ -13,6 +13,7 @@ use serenity::framework::standard::{
 use serenity::model::channel::Message;
 use std::error::Error;
 use tiltak::position::{Move, Position};
+use tiltak::ptn::{Game, PtnMove};
 
 #[group]
 #[commands(analyze_ptn, analyze_tps, ping, analyze_startpos)]
@@ -83,6 +84,7 @@ async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
                 }
             };
 
+            println!("{:?}", analysis);
             msg.reply(ctx, format!("{:?}", analysis)).await?;
             Ok(())
         } else {
@@ -148,8 +150,7 @@ fn analyze_tps_sized<const S: usize>(tps: &str) -> CommandResult<(f32, Vec<Move>
 struct GameAnalysis {
     game_tags: Vec<(String, String)>,
     move_strings: Vec<String>,
-    move_scores: Vec<f32>,
-    pvs: Vec<String>,
+    comments: Vec<String>,
 }
 
 async fn analyze_ptn_sized<const S: usize>(
@@ -186,32 +187,62 @@ async fn analyze_ptn_sized<const S: usize>(
                     Err("AWS error".into())
                 }
                 Ok(outputs) => {
-                    let move_annotations = annotate_move_scores(
-                        &outputs
-                            .iter()
-                            .map(|output| output.score)
-                            .collect::<Vec<f32>>(),
-                    );
+                    let (move_scores, pvs): (Vec<f32>, Vec<Vec<Move>>) = outputs
+                        .into_iter()
+                        .map(|Output { score, pv }| (score, pv))
+                        .unzip();
+                    let move_annotations = annotate_move_scores(&move_scores);
+
                     let game_move_strings = game
                         .moves
                         .iter()
-                        .zip(move_annotations)
+                        .zip(move_annotations.clone())
                         .map(|(mv, annotation)| mv.mv.to_string::<S>() + annotation)
                         .collect();
-                    let (move_scores, pvs) = outputs
-                        .into_iter()
-                        .map(|Output { score, pv }| {
+
+                    let comments: Vec<String> = move_scores
+                        .iter()
+                        .skip(1)
+                        .zip(pvs)
+                        .map(|(score, pv)| {
                             let pv_strings: Vec<String> =
                                 pv.iter().take(3).map(|mv| mv.to_string::<S>()).collect();
-                            (score, pv_strings.join(" "))
+                            format!("{:.1}%, pv {}", score * 100.0, pv_strings.join(" "))
                         })
-                        .unzip();
+                        .collect();
+
+                    let annotated_game = Game {
+                        start_position: game.start_position.clone(),
+                        moves: game
+                            .moves
+                            .iter()
+                            .zip(move_annotations.into_iter())
+                            .zip(comments.clone().into_iter())
+                            .map(|((ptn_move, annotation), comment)| PtnMove {
+                                mv: ptn_move.mv.clone(),
+                                annotations: if annotation.is_empty() {
+                                    vec![]
+                                } else {
+                                    vec![annotation]
+                                },
+                                comment,
+                            })
+                            .collect(),
+                        game_result: game.game_result,
+                        tags: game.tags.clone(),
+                    };
+
+                    let mut buffer = Vec::new();
+                    annotated_game.game_to_ptn(&mut buffer).unwrap();
+                    println!(
+                        "{}",
+                        std::str::from_utf8(buffer.as_slice()).unwrap().to_string()
+                    );
 
                     Ok(GameAnalysis {
                         game_tags: game.tags.clone(),
                         move_strings: game_move_strings,
-                        move_scores,
-                        pvs,
+                        comments,
                     })
                 }
             }
