@@ -11,10 +11,12 @@ use serenity::framework::standard::{
 };
 use serenity::http::{AttachmentType, Typing};
 use serenity::model::channel::Message;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time;
 use tiltak::position::{Move, Position};
 use tiltak::ptn::{Game, PtnMove};
+
+static CURRENTLY_ANALYZING: AtomicBool = AtomicBool::new(false);
 
 static GAMES_ANALYZED: AtomicUsize = AtomicUsize::new(0);
 const MAX_GAMES_ANALYZED: usize = 100;
@@ -159,6 +161,18 @@ async fn analyze_ptn_sized<const S: usize>(
                 GAMES_ANALYZED.fetch_add(1, Ordering::SeqCst);
             }
 
+            if CURRENTLY_ANALYZING
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_err()
+            {
+                msg.reply(
+                    ctx,
+                    "Cannot analyze two games simultaneously. Try again later",
+                )
+                .await?;
+                return Ok(());
+            }
+
             if let Some(komi) = game.tags.iter().find_map(|(tag, value)| {
                 if tag == "Komi" {
                     Some(value.clone())
@@ -186,6 +200,7 @@ async fn analyze_ptn_sized<const S: usize>(
             let results = futures::future::join_all(futures).await;
 
             typing.stop();
+            CURRENTLY_ANALYZING.store(false, Ordering::SeqCst);
 
             // Some trickery to transform Vec<Result<_>> into Result<Vec<_>>
             let result_results: Result<Vec<_>, _> = results.into_iter().collect();
