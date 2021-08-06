@@ -1466,6 +1466,7 @@ dependencies = [
  "fern",
  "futures",
  "log",
+ "once_cell",
  "pgn-traits",
  "rusoto_core",
  "rusoto_lambda",

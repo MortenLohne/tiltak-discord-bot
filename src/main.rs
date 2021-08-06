@@ -3,6 +3,7 @@ mod cli;
 
 use crate::aws::Output;
 use board_game_traits::Position as PositionTrait;
+use once_cell::sync::OnceCell;
 use serenity::async_trait;
 use serenity::client::{Client, Context, EventHandler};
 use serenity::framework::standard::{
@@ -15,6 +16,8 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time;
 use tiltak::position::{Move, Position};
 use tiltak::ptn::{Game, PtnMove};
+
+static AWS_FUNCTION_NAME: OnceCell<String> = OnceCell::new();
 
 static CURRENTLY_ANALYZING: AtomicBool = AtomicBool::new(false);
 
@@ -34,6 +37,10 @@ impl EventHandler for Handler {}
 async fn main() {
     let cli_options = cli::parse_cli_options().unwrap();
     println!("Options: {:?}", cli_options);
+
+    AWS_FUNCTION_NAME
+        .set(cli_options.aws_function_name)
+        .unwrap();
 
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("!")) // set the bot's prefix to "~"
@@ -195,7 +202,7 @@ async fn analyze_ptn_sized<const S: usize>(
                     .iter()
                     .map(|ptn_move| ptn_move.mv.clone())
                     .collect();
-                aws::pv_aws("Taik", S, moves, 500_000)
+                aws::pv_aws(S, moves, 500_000)
             });
             let results = futures::future::join_all(futures).await;
 

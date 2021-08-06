@@ -1,3 +1,4 @@
+use crate::AWS_FUNCTION_NAME;
 use bytes::Bytes;
 use log::{debug, error, warn};
 use rusoto_core::Region;
@@ -29,12 +30,7 @@ pub struct Output {
     pub score: f32,
 }
 
-pub async fn pv_aws(
-    aws_function_name: &str,
-    size: usize,
-    moves: Vec<Move>,
-    nodes: u64,
-) -> io::Result<Output> {
+pub async fn pv_aws(size: usize, moves: Vec<Move>, nodes: u64) -> io::Result<Output> {
     let is_black = moves.len() % 2 == 1;
     let event = Event {
         size,
@@ -48,7 +44,7 @@ pub async fn pv_aws(
 
     let request = InvocationRequest {
         client_context: None,
-        function_name: aws_function_name.to_string(),
+        function_name: AWS_FUNCTION_NAME.get().unwrap().clone(),
         invocation_type: Some("RequestResponse".to_string()),
         log_type: None,
         payload: Some(Bytes::copy_from_slice(&serde_json::to_vec(&event).unwrap())),
