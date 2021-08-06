@@ -1,6 +1,7 @@
 mod aws;
 mod cli;
 
+use crate::aws::Output;
 use board_game_traits::Position as PositionTrait;
 use pgn_traits::PgnPosition;
 use serenity::async_trait;
@@ -64,32 +65,25 @@ async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
             println!("{}, {}", line, line.contains("Size"));
         }
         if let Some(size_line) = ptn_text.lines().find(|line| line.contains("Size")) {
-            match size_line
+            let analysis = match size_line
                 .split_whitespace()
                 .nth(1)
                 .and_then(|r| r.chars().nth(1).and_then(|r| r.to_digit(10)))
             {
-                Some(4) => {
-                    analyze_ptn_sized::<4>(ctx, msg, ptn_text).await.unwrap();
-                    unimplemented!()
-                }
-                Some(5) => {
-                    analyze_ptn_sized::<5>(ctx, msg, ptn_text).await.unwrap();
-                    unimplemented!()
-                }
-                Some(6) => {
-                    analyze_ptn_sized::<6>(ctx, msg, ptn_text).await.unwrap();
-                    unimplemented!()
-                }
+                Some(4) => analyze_ptn_sized::<4>(ctx, msg, ptn_text).await.unwrap(),
+                Some(5) => analyze_ptn_sized::<5>(ctx, msg, ptn_text).await.unwrap(),
+                Some(6) => analyze_ptn_sized::<6>(ctx, msg, ptn_text).await.unwrap(),
                 Some(s) => {
                     msg.reply(ctx, format!("Size {} is unsupported", s)).await?;
-                    Ok(())
+                    return Ok(());
                 }
                 None => {
                     msg.reply(ctx, "Couldn't determine size for ptn").await?;
-                    Ok(())
+                    return Ok(());
                 }
-            }
+            };
+            msg.reply(ctx, format!("{:?}", analysis)).await?;
+            Ok(())
         } else {
             msg.reply(ctx, "Couldn't determine size for ptn").await?;
             Ok(())
@@ -153,7 +147,7 @@ async fn analyze_ptn_sized<const S: usize>(
     ctx: &Context,
     msg: &Message,
     ptn: &str,
-) -> Result<Vec<aws::Output>, Box<dyn Error + Send + Sync>> {
+) -> Result<Vec<(f32, String)>, Box<dyn Error + Send + Sync>> {
     match tiltak::ptn::ptn_parser::parse_ptn::<Position<S>>(ptn) {
         Ok(games) => {
             if games.is_empty() {
@@ -167,7 +161,7 @@ async fn analyze_ptn_sized<const S: usize>(
                 return Err("Cannot analyze games with a custom start position".into());
             }
 
-            let futures = (0..game.moves.len()).map(|i| {
+            let futures = (0..=game.moves.len()).map(|i| {
                 let moves = game.moves[0..i]
                     .iter()
                     .map(|ptn_move| ptn_move.mv.clone())
@@ -177,10 +171,20 @@ async fn analyze_ptn_sized<const S: usize>(
             // Some trickery to transform Vec<Result<_>> into Result<Vec<_>>
             let results = futures::future::join_all(futures).await;
             let result_results: Result<Vec<_>, _> = results.into_iter().collect();
-            if result_results.is_err() {
-                msg.reply(ctx, "AWS error").await?;
+            match result_results {
+                Err(_) => {
+                    msg.reply(ctx, "AWS error").await?;
+                    Err("AWS error".into())
+                }
+                Ok(outputs) => Ok(outputs
+                    .iter()
+                    .map(|Output { score, pv }| {
+                        let pv_strings: Vec<String> =
+                            pv.iter().take(3).map(|mv| mv.to_string::<S>()).collect();
+                        (*score, pv_strings.join(" "))
+                    })
+                    .collect()),
             }
-            result_results.map_err(|err| err.into())
         }
         Err(err) => {
             msg.reply(ctx, err.to_string()).await?;
