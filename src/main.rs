@@ -147,6 +147,19 @@ async fn analyze_ptn_sized<const S: usize>(
                 return Ok(());
             }
 
+            if let Some(komi) = game.tags.iter().find_map(|(tag, value)| {
+                if tag == "Komi" {
+                    Some(value.clone())
+                } else {
+                    None
+                }
+            }) {
+                if komi != "0" && komi != "0.0" {
+                    msg.reply(ctx, "Note: The game will be analyzed as if it had 0 komi.")
+                        .await?;
+                }
+            }
+
             let start_time = time::Instant::now();
 
             let futures = (0..=game.moves.len()).map(|i| {
