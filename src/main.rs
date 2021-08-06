@@ -9,7 +9,7 @@ use serenity::framework::standard::{
     macros::{command, group},
     CommandResult, StandardFramework,
 };
-use serenity::http::AttachmentType;
+use serenity::http::{AttachmentType, Typing};
 use serenity::model::channel::Message;
 use std::time;
 use tiltak::position::{Move, Position};
@@ -160,6 +160,8 @@ async fn analyze_ptn_sized<const S: usize>(
                 }
             }
 
+            let typing = Typing::start(ctx.http.clone(), msg.channel_id.0)?;
+
             let start_time = time::Instant::now();
 
             let futures = (0..=game.moves.len()).map(|i| {
@@ -169,8 +171,11 @@ async fn analyze_ptn_sized<const S: usize>(
                     .collect();
                 aws::pv_aws("Taik", S, moves, 500_000)
             });
-            // Some trickery to transform Vec<Result<_>> into Result<Vec<_>>
             let results = futures::future::join_all(futures).await;
+
+            typing.stop();
+
+            // Some trickery to transform Vec<Result<_>> into Result<Vec<_>>
             let result_results: Result<Vec<_>, _> = results.into_iter().collect();
             match result_results {
                 Err(_) => {
