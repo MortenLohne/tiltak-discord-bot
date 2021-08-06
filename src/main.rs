@@ -11,9 +11,13 @@ use serenity::framework::standard::{
 };
 use serenity::http::{AttachmentType, Typing};
 use serenity::model::channel::Message;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time;
 use tiltak::position::{Move, Position};
 use tiltak::ptn::{Game, PtnMove};
+
+static GAMES_ANALYZED: AtomicUsize = AtomicUsize::new(0);
+const MAX_GAMES_ANALYZED: usize = 100;
 
 #[group]
 #[commands(analyze_ptn, analyze_tps, ping)]
@@ -145,6 +149,14 @@ async fn analyze_ptn_sized<const S: usize>(
                 msg.reply(ctx, "Game length cannot exceed 100 moves")
                     .await?;
                 return Ok(());
+            }
+
+            if GAMES_ANALYZED.load(Ordering::SeqCst) > MAX_GAMES_ANALYZED {
+                msg.reply(ctx, "Too many games analyzed recently. Try again later")
+                    .await?;
+                return Ok(());
+            } else {
+                GAMES_ANALYZED.fetch_add(1, Ordering::SeqCst);
             }
 
             if let Some(komi) = game.tags.iter().find_map(|(tag, value)| {
