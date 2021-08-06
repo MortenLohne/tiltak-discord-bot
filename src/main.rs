@@ -10,8 +10,10 @@ use serenity::framework::standard::{
     macros::{command, group},
     CommandResult, StandardFramework,
 };
+use serenity::http::AttachmentType;
 use serenity::model::channel::Message;
 use std::error::Error;
+use std::time;
 use tiltak::position::{Move, Position};
 use tiltak::ptn::{Game, PtnMove};
 
@@ -61,10 +63,12 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
     println!("Received {} from {}", msg.content, msg.author.name);
+    if msg.channel(&ctx.cache).await.is_none() {
+        msg.reply(ctx, "Analysis is only available in specific channels")
+            .await?;
+        return Ok(());
+    }
     if let Some((_, ptn_text)) = msg.content.split_once(|ch: char| ch.is_whitespace()) {
-        for line in ptn_text.lines() {
-            println!("{}, {}", line, line.contains("Size"));
-        }
         if let Some(size_line) = ptn_text.lines().find(|line| line.contains("Size")) {
             let analysis = match size_line
                 .split_whitespace()
@@ -171,6 +175,14 @@ async fn analyze_ptn_sized<const S: usize>(
                 return Err("Cannot analyze games with a custom start position".into());
             }
 
+            if game.moves.len() > 200 {
+                let err = "Game length cannot exceed 100 moves";
+                msg.reply(ctx, err).await?;
+                return Err(err.into());
+            }
+
+            let start_time = time::Instant::now();
+
             let futures = (0..=game.moves.len()).map(|i| {
                 let moves = game.moves[0..i]
                     .iter()
@@ -232,12 +244,55 @@ async fn analyze_ptn_sized<const S: usize>(
                         tags: game.tags.clone(),
                     };
 
+                    let white_name = annotated_game
+                        .tags
+                        .iter()
+                        .find_map(|(tag, value)| {
+                            if tag == "Player1" {
+                                Some(value.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or("?".to_string());
+
+                    let black_name = annotated_game
+                        .tags
+                        .iter()
+                        .find_map(|(tag, value)| {
+                            if tag == "Player2" {
+                                Some(value.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or("?".to_string());
+
                     let mut buffer = Vec::new();
                     annotated_game.game_to_ptn(&mut buffer).unwrap();
                     println!(
                         "{}",
                         std::str::from_utf8(buffer.as_slice()).unwrap().to_string()
                     );
+
+                    let channel = msg.channel(&ctx.cache).await.unwrap();
+
+                    channel
+                        .id()
+                        .send_message(&ctx.http, |m| {
+                            m.content(format!(
+                                "Finished analyzing {} vs {} in {:.1}s. Best viewed in ptn.ninja!",
+                                white_name,
+                                black_name,
+                                start_time.elapsed().as_secs_f32()
+                            ));
+                            m.add_file(AttachmentType::Bytes {
+                                data: buffer.into(),
+                                filename: format!("{}_vs_{}.txt", white_name, black_name),
+                            });
+                            m
+                        })
+                        .await?;
 
                     Ok(GameAnalysis {
                         game_tags: game.tags.clone(),
