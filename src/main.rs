@@ -3,7 +3,6 @@ mod cli;
 
 use crate::aws::Output;
 use board_game_traits::Position as PositionTrait;
-use pgn_traits::PgnPosition;
 use serenity::async_trait;
 use serenity::client::{Client, Context, EventHandler};
 use serenity::framework::standard::{
@@ -99,36 +98,22 @@ async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 async fn analyze_tps(ctx: &Context, msg: &Message) -> CommandResult {
-    let (_, tps) = msg
-        .content
-        .split_once(|ch: char| ch.is_whitespace())
-        .unwrap();
-    let size = tps.chars().filter(|ch| *ch == '/').count() + 1;
-    println!(
-        "Received {} with tps {} size {} from {}",
-        msg.content, tps, size, msg.author.name
-    );
-    let (eval, pv) = match size {
-        4 => analyze_tps_sized::<4>(tps).unwrap(),
-        5 => analyze_tps_sized::<5>(tps).unwrap(),
-        6 => analyze_tps_sized::<6>(tps).unwrap(),
-        _ => unimplemented!(),
-    };
-    msg.reply(
-        ctx,
-        format!("{:.1}%: {}", eval * 100.0, pv[0].to_string::<5>()),
-    )
-    .await?;
-    Err("error".into())
-}
-
-fn analyze_tps_sized<const S: usize>(tps: &str) -> CommandResult<(f32, Vec<Move>)> {
-    let position: Position<S> = Position::from_fen(tps).unwrap();
-    let mut tree = tiltak::search::MonteCarloTree::new(position);
-    for _ in 0..100_000 {
-        tree.select();
+    if let Some((_, tps)) = msg.content.split_once(|ch: char| ch.is_whitespace()) {
+        let size = tps.chars().filter(|ch| *ch == '/').count() + 1;
+        println!(
+            "Received {} with tps {} size {} from {}",
+            msg.content, tps, size, msg.author.name
+        );
+        match size {
+            0..=3 => msg.reply(ctx, "Couldn't read tps").await?,
+            4..=6 => msg.reply(ctx, "Not implemented yet!").await?,
+            s => msg.reply(ctx, format!("Size {} is unsupported", s)).await?,
+        };
+        Ok(())
+    } else {
+        msg.reply(ctx, "Couldn't read tps").await?;
+        Ok(())
     }
-    Ok((tree.mean_action_value(), tree.pv().collect()))
 }
 
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
