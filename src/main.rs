@@ -30,7 +30,7 @@ async fn main() {
     println!("Options: {:?}", cli_options);
 
     let framework = StandardFramework::new()
-        .configure(|c| c.prefix("~")) // set the bot's prefix to "~"
+        .configure(|c| c.prefix("!")) // set the bot's prefix to "~"
         .group(&GENERAL_GROUP);
 
     println!("Initialized framework");
