@@ -12,7 +12,6 @@ use serenity::framework::standard::{
 };
 use serenity::http::AttachmentType;
 use serenity::model::channel::Message;
-use std::error::Error;
 use std::time;
 use tiltak::position::{Move, Position};
 use tiltak::ptn::{Game, PtnMove};
@@ -70,7 +69,7 @@ async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
     }
     if let Some((_, ptn_text)) = msg.content.split_once(|ch: char| ch.is_whitespace()) {
         if let Some(size_line) = ptn_text.lines().find(|line| line.contains("Size")) {
-            let analysis = match size_line
+            match size_line
                 .split_whitespace()
                 .nth(1)
                 .and_then(|r| r.chars().nth(1).and_then(|r| r.to_digit(10)))
@@ -87,9 +86,6 @@ async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
                     return Ok(());
                 }
             };
-
-            println!("{:?}", analysis);
-            msg.reply(ctx, format!("{:?}", analysis)).await?;
             Ok(())
         } else {
             msg.reply(ctx, "Couldn't determine size for ptn").await?;
@@ -97,7 +93,7 @@ async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
         }
     } else {
         msg.reply(ctx, "No PTN provided").await?;
-        Err("No PTN provided".into())
+        Ok(())
     }
 }
 
@@ -161,24 +157,24 @@ async fn analyze_ptn_sized<const S: usize>(
     ctx: &Context,
     msg: &Message,
     ptn: &str,
-) -> Result<GameAnalysis, Box<dyn Error + Send + Sync>> {
+) -> CommandResult {
     match tiltak::ptn::ptn_parser::parse_ptn::<Position<S>>(ptn) {
         Ok(games) => {
             if games.is_empty() {
                 msg.reply(ctx, "Error: parsed 0 games").await?;
-                return Err("Error: parsed 0 games".into());
+                return Ok(());
             }
             let game = &games[0];
             if game.start_position != Position::start_position() {
                 msg.reply(ctx, "Cannot analyze games with a custom start position")
                     .await?;
-                return Err("Cannot analyze games with a custom start position".into());
+                return Ok(());
             }
 
             if game.moves.len() > 200 {
-                let err = "Game length cannot exceed 100 moves";
-                msg.reply(ctx, err).await?;
-                return Err(err.into());
+                msg.reply(ctx, "Game length cannot exceed 100 moves")
+                    .await?;
+                return Ok(());
             }
 
             let start_time = time::Instant::now();
@@ -188,7 +184,7 @@ async fn analyze_ptn_sized<const S: usize>(
                     .iter()
                     .map(|ptn_move| ptn_move.mv.clone())
                     .collect();
-                aws::pv_aws("Taik", S, moves, 100_000)
+                aws::pv_aws("Taik", S, moves, 500_000)
             });
             // Some trickery to transform Vec<Result<_>> into Result<Vec<_>>
             let results = futures::future::join_all(futures).await;
@@ -199,80 +195,12 @@ async fn analyze_ptn_sized<const S: usize>(
                     Err("AWS error".into())
                 }
                 Ok(outputs) => {
-                    let (move_scores, pvs): (Vec<f32>, Vec<Vec<Move>>) = outputs
-                        .into_iter()
-                        .map(|Output { score, pv }| (score, pv))
-                        .unzip();
-                    let move_annotations = annotate_move_scores(&move_scores);
-
-                    let game_move_strings = game
-                        .moves
-                        .iter()
-                        .zip(move_annotations.clone())
-                        .map(|(mv, annotation)| mv.mv.to_string::<S>() + annotation)
-                        .collect();
-
-                    let comments: Vec<String> = move_scores
-                        .iter()
-                        .skip(1)
-                        .zip(pvs)
-                        .map(|(score, pv)| {
-                            let pv_strings: Vec<String> =
-                                pv.iter().take(3).map(|mv| mv.to_string::<S>()).collect();
-                            format!("{:.1}%, pv {}", score * 100.0, pv_strings.join(" "))
-                        })
-                        .collect();
-
-                    let annotated_game = Game {
-                        start_position: game.start_position.clone(),
-                        moves: game
-                            .moves
-                            .iter()
-                            .zip(move_annotations.into_iter())
-                            .zip(comments.clone().into_iter())
-                            .map(|((ptn_move, annotation), comment)| PtnMove {
-                                mv: ptn_move.mv.clone(),
-                                annotations: if annotation.is_empty() {
-                                    vec![]
-                                } else {
-                                    vec![annotation]
-                                },
-                                comment,
-                            })
-                            .collect(),
-                        game_result: game.game_result,
-                        tags: game.tags.clone(),
-                    };
-
-                    let white_name = annotated_game
-                        .tags
-                        .iter()
-                        .find_map(|(tag, value)| {
-                            if tag == "Player1" {
-                                Some(value.clone())
-                            } else {
-                                None
-                            }
-                        })
-                        .unwrap_or("?".to_string());
-
-                    let black_name = annotated_game
-                        .tags
-                        .iter()
-                        .find_map(|(tag, value)| {
-                            if tag == "Player2" {
-                                Some(value.clone())
-                            } else {
-                                None
-                            }
-                        })
-                        .unwrap_or("?".to_string());
-
-                    let mut buffer = Vec::new();
-                    annotated_game.game_to_ptn(&mut buffer).unwrap();
+                    let (file_contents, white_name, black_name) = process_aws_output(game, outputs);
                     println!(
                         "{}",
-                        std::str::from_utf8(buffer.as_slice()).unwrap().to_string()
+                        std::str::from_utf8(file_contents.as_slice())
+                            .unwrap()
+                            .to_string()
                     );
 
                     let channel = msg.channel(&ctx.cache).await.unwrap();
@@ -287,18 +215,13 @@ async fn analyze_ptn_sized<const S: usize>(
                                 start_time.elapsed().as_secs_f32()
                             ));
                             m.add_file(AttachmentType::Bytes {
-                                data: buffer.into(),
+                                data: file_contents.into(),
                                 filename: format!("{}_vs_{}.txt", white_name, black_name),
                             });
                             m
                         })
                         .await?;
-
-                    Ok(GameAnalysis {
-                        game_tags: game.tags.clone(),
-                        move_strings: game_move_strings,
-                        comments,
-                    })
+                    Ok(())
                 }
             }
         }
@@ -307,6 +230,71 @@ async fn analyze_ptn_sized<const S: usize>(
             Err(err)
         }
     }
+}
+
+fn process_aws_output<const S: usize>(
+    game: &Game<Position<S>>,
+    outputs: Vec<Output>,
+) -> (Vec<u8>, String, String) {
+    let (move_scores, pvs): (Vec<f32>, Vec<Vec<Move>>) = outputs
+        .into_iter()
+        .map(|Output { score, pv }| (score, pv))
+        .unzip();
+    let move_annotations = annotate_move_scores(&move_scores);
+
+    let comments = move_scores.iter().skip(1).zip(pvs).map(|(score, pv)| {
+        let pv_strings: Vec<String> = pv.iter().take(3).map(|mv| mv.to_string::<S>()).collect();
+        format!("{:.1}%, pv {}", score * 100.0, pv_strings.join(" "))
+    });
+
+    let annotated_game = Game {
+        start_position: game.start_position.clone(),
+        moves: game
+            .moves
+            .iter()
+            .zip(move_annotations.into_iter())
+            .zip(comments)
+            .map(|((ptn_move, annotation), comment)| PtnMove {
+                mv: ptn_move.mv.clone(),
+                annotations: if annotation.is_empty() {
+                    vec![]
+                } else {
+                    vec![annotation]
+                },
+                comment,
+            })
+            .collect(),
+        game_result: game.game_result,
+        tags: game.tags.clone(),
+    };
+
+    let white_name = annotated_game
+        .tags
+        .iter()
+        .find_map(|(tag, value)| {
+            if tag == "Player1" {
+                Some(value.clone())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| "?".to_string());
+
+    let black_name = annotated_game
+        .tags
+        .iter()
+        .find_map(|(tag, value)| {
+            if tag == "Player2" {
+                Some(value.clone())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| "?".to_string());
+
+    let mut buffer = Vec::new();
+    annotated_game.game_to_ptn(&mut buffer).unwrap();
+    (buffer, white_name, black_name)
 }
 
 fn annotate_move_scores(move_scores: &[f32]) -> Vec<&'static str> {
