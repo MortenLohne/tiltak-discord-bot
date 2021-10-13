@@ -75,7 +75,7 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
 async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
     println!("Received {} from {}", msg.content, msg.author.name);
     if msg.channel(&ctx.cache).await.is_none() {
-        msg.reply(ctx, "Analysis is only available in specific channels")
+        msg.reply(ctx, "Analysis is only available in specific channels.")
             .await?;
         return Ok(());
     }
@@ -90,7 +90,8 @@ async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
                 Some(5) => analyze_ptn_sized::<5>(ctx, msg, ptn_text).await?,
                 Some(6) => analyze_ptn_sized::<6>(ctx, msg, ptn_text).await?,
                 Some(s) => {
-                    msg.reply(ctx, format!("Size {} is unsupported", s)).await?;
+                    msg.reply(ctx, format!("Size {} is unsupported.", s))
+                        .await?;
                     return Ok(());
                 }
                 None => {
@@ -112,7 +113,7 @@ async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
             Ok(())
         }
     } else {
-        msg.reply(ctx, "No PTN provided").await?;
+        msg.reply(ctx, "No PTN provided.").await?;
         Ok(())
     }
 }
@@ -126,13 +127,16 @@ async fn analyze_tps(ctx: &Context, msg: &Message) -> CommandResult {
             msg.content, tps, size, msg.author.name
         );
         match size {
-            0..=3 => msg.reply(ctx, "Couldn't read tps").await?,
+            0..=3 => msg.reply(ctx, "Couldn't read tps.").await?,
             4..=6 => msg.reply(ctx, "Not implemented yet!").await?,
-            s => msg.reply(ctx, format!("Size {} is unsupported", s)).await?,
+            s => {
+                msg.reply(ctx, format!("Size {} is unsupported.", s))
+                    .await?
+            }
         };
         Ok(())
     } else {
-        msg.reply(ctx, "Couldn't read tps").await?;
+        msg.reply(ctx, "Couldn't read tps.").await?;
         Ok(())
     }
 }
@@ -152,24 +156,24 @@ async fn analyze_ptn_sized<const S: usize>(
     match tiltak::ptn::ptn_parser::parse_ptn::<Position<S>>(ptn) {
         Ok(games) => {
             if games.is_empty() {
-                msg.reply(ctx, "Error: parsed 0 games").await?;
+                msg.reply(ctx, "Error: parsed 0 games.").await?;
                 return Ok(());
             }
             let game = &games[0];
             if game.start_position != Position::start_position() {
-                msg.reply(ctx, "Cannot analyze games with a custom start position")
+                msg.reply(ctx, "Cannot analyze games with a custom start position.")
                     .await?;
                 return Ok(());
             }
 
             if game.moves.len() > 200 {
-                msg.reply(ctx, "Game length cannot exceed 100 moves")
+                msg.reply(ctx, "Game length cannot exceed 100 moves.")
                     .await?;
                 return Ok(());
             }
 
             if GAMES_ANALYZED.load(Ordering::SeqCst) > MAX_GAMES_ANALYZED {
-                msg.reply(ctx, "Too many games analyzed recently. Try again later")
+                msg.reply(ctx, "Too many games analyzed recently. Try again later.")
                     .await?;
                 return Ok(());
             } else {
@@ -182,7 +186,7 @@ async fn analyze_ptn_sized<const S: usize>(
             {
                 msg.reply(
                     ctx,
-                    "Cannot analyze two games simultaneously. Try again later",
+                    "Cannot analyze two games simultaneously. Try again later.",
                 )
                 .await?;
                 return Ok(());
@@ -221,7 +225,7 @@ async fn analyze_ptn_sized<const S: usize>(
             let result_results: Result<Vec<_>, _> = results.into_iter().collect();
             match result_results {
                 Err(_) => {
-                    msg.reply(ctx, "AWS error").await?;
+                    msg.reply(ctx, "AWS error.").await?;
                     Err("AWS error".into())
                 }
                 Ok(outputs) => {
