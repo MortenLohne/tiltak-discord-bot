@@ -94,13 +94,21 @@ async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
                     return Ok(());
                 }
                 None => {
-                    msg.reply(ctx, "Couldn't determine size for ptn").await?;
+                    msg.reply(
+                        ctx,
+                        "Invalid Size tag. The PTN must include a tag such as [Size \"6\"].",
+                    )
+                    .await?;
                     return Ok(());
                 }
             };
             Ok(())
         } else {
-            msg.reply(ctx, "Couldn't determine size for ptn").await?;
+            msg.reply(
+                ctx,
+                "Couldn't determine board size. The PTN must include a tag such as [Size \"6\"].",
+            )
+            .await?;
             Ok(())
         }
     } else {
