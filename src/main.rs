@@ -22,7 +22,7 @@ static AWS_FUNCTION_NAME: OnceCell<String> = OnceCell::new();
 static CURRENTLY_ANALYZING: AtomicBool = AtomicBool::new(false);
 
 static GAMES_ANALYZED: AtomicUsize = AtomicUsize::new(0);
-const MAX_GAMES_ANALYZED: usize = 100;
+const MAX_GAMES_ANALYZED: usize = 200;
 
 #[group]
 #[commands(analyze_ptn, analyze_tps, ping)]
