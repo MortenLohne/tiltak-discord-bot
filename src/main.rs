@@ -14,7 +14,7 @@ use serenity::http::{AttachmentType, Typing};
 use serenity::model::channel::Message;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time;
-use tiltak::position::{Move, Position};
+use tiltak::position::Position;
 use tiltak::ptn::{Game, PtnMove};
 
 static AWS_FUNCTION_NAME: OnceCell<String> = OnceCell::new();
@@ -212,7 +212,7 @@ async fn analyze_ptn_sized<const S: usize>(
             let futures = (0..=game.moves.len()).map(|i| {
                 let moves = game.moves[0..i]
                     .iter()
-                    .map(|ptn_move| ptn_move.mv.clone())
+                    .map(|ptn_move| ptn_move.mv.to_string::<S>())
                     .collect();
                 aws::pv_aws(S, moves, 500_000)
             });
@@ -230,12 +230,7 @@ async fn analyze_ptn_sized<const S: usize>(
                 }
                 Ok(outputs) => {
                     let (file_contents, white_name, black_name) = process_aws_output(game, outputs);
-                    println!(
-                        "{}",
-                        std::str::from_utf8(file_contents.as_slice())
-                            .unwrap()
-                            .to_string()
-                    );
+                    println!("{}", std::str::from_utf8(file_contents.as_slice()).unwrap());
 
                     let channel = msg.channel(&ctx.cache).await.unwrap();
 
@@ -270,16 +265,17 @@ fn process_aws_output<const S: usize>(
     game: &Game<Position<S>>,
     outputs: Vec<Output>,
 ) -> (Vec<u8>, String, String) {
-    let (move_scores, pvs): (Vec<f32>, Vec<Vec<Move>>) = outputs
+    let (move_scores, pv_strings): (Vec<f32>, Vec<Vec<String>>) = outputs
         .into_iter()
         .map(|Output { score, pv }| (score, pv))
         .unzip();
     let move_annotations = annotate_move_scores(&move_scores);
 
-    let comments = move_scores.iter().skip(1).zip(pvs).map(|(score, pv)| {
-        let pv_strings: Vec<String> = pv.iter().take(3).map(|mv| mv.to_string::<S>()).collect();
-        format!("{:.1}%, pv {}", score * 100.0, pv_strings.join(" "))
-    });
+    let comments = move_scores
+        .iter()
+        .skip(1)
+        .zip(pv_strings)
+        .map(|(score, pv)| format!("{:.1}%, pv {}", score * 100.0, pv.join(" ")));
 
     let annotated_game = Game {
         start_position: game.start_position.clone(),

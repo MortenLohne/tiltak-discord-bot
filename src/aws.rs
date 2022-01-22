@@ -6,7 +6,6 @@ use rusoto_lambda::{InvocationRequest, Lambda, LambdaClient};
 use serde::{Deserialize, Serialize};
 use std::io;
 use std::time::Duration;
-use tiltak::position::Move;
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum TimeControl {
@@ -17,7 +16,8 @@ pub enum TimeControl {
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Event {
     pub size: usize,
-    pub moves: Vec<Move>,
+    pub tps: Option<String>,
+    pub moves: Vec<String>,
     pub time_control: TimeControl,
     pub dirichlet_noise: Option<f32>,
     pub rollout_depth: u16,
@@ -26,14 +26,15 @@ pub struct Event {
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Output {
-    pub pv: Vec<Move>,
+    pub pv: Vec<String>,
     pub score: f32,
 }
 
-pub async fn pv_aws(size: usize, moves: Vec<Move>, nodes: u64) -> io::Result<Output> {
+pub async fn pv_aws(size: usize, moves: Vec<String>, nodes: u64) -> io::Result<Output> {
     let is_black = moves.len() % 2 == 1;
     let event = Event {
         size,
+        tps: None,
         moves,
         time_control: TimeControl::FixedNodes(nodes),
         dirichlet_noise: None,
