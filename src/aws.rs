@@ -31,7 +31,7 @@ pub struct Output {
 }
 
 pub async fn pv_aws(size: usize, moves: Vec<String>, nodes: u64) -> io::Result<Output> {
-    let is_black = moves.len() % 2 == 1;
+    let is_white = moves.len() % 2 != 1;
     let event = Event {
         size,
         tps: None,
@@ -65,12 +65,13 @@ pub async fn pv_aws(size: usize, moves: Vec<String>, nodes: u64) -> io::Result<O
                 warn!("AWS response contained no status code");
             }
             if let Some(payload) = response.payload {
-                let mut output: Output = serde_json::from_str(
-                    std::str::from_utf8(&payload)
-                        .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?,
-                )?;
+                let payload_string = std::str::from_utf8(&payload)
+                    .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+                debug!("AWS event: {:?}", event);
+                debug!("AWS payload: {}", payload_string);
+                let mut output: Output = serde_json::from_str(payload_string)?;
                 // Always show score from white's perspective
-                if is_black {
+                if is_white {
                     output.score = 1.0 - output.score;
                 }
                 Ok(output)

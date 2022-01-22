@@ -3,6 +3,7 @@ mod cli;
 
 use crate::aws::Output;
 use board_game_traits::Position as PositionTrait;
+use log::warn;
 use once_cell::sync::OnceCell;
 use serenity::async_trait;
 use serenity::client::{Client, Context, EventHandler};
@@ -224,7 +225,8 @@ async fn analyze_ptn_sized<const S: usize>(
             // Some trickery to transform Vec<Result<_>> into Result<Vec<_>>
             let result_results: Result<Vec<_>, _> = results.into_iter().collect();
             match result_results {
-                Err(_) => {
+                Err(error) => {
+                    warn!("AWS error: {}", error);
                     msg.reply(ctx, "AWS error.").await?;
                     Err("AWS error".into())
                 }
@@ -275,7 +277,10 @@ fn process_aws_output<const S: usize>(
         .iter()
         .skip(1)
         .zip(pv_strings)
-        .map(|(score, pv)| format!("{:.1}%, pv {}", score * 100.0, pv.join(" ")));
+        .map(|(score, pv)| {
+            let pv_moves = pv.iter().take(3).map(String::as_str).collect::<Vec<&str>>();
+            format!("{:.1}%, pv {}", score * 100.0, pv_moves.join(" "))
+        });
 
     let annotated_game = Game {
         start_position: game.start_position.clone(),
