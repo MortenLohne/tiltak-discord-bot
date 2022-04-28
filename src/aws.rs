@@ -6,6 +6,7 @@ use rusoto_lambda::{InvocationRequest, Lambda, LambdaClient};
 use serde::{Deserialize, Serialize};
 use std::io;
 use std::time::Duration;
+use tiltak::position::Komi;
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum TimeControl {
@@ -34,14 +35,14 @@ pub struct Output {
     pub time_taken: Duration,
 }
 
-pub async fn pv_aws(size: usize, moves: Vec<String>, nodes: u64) -> io::Result<Output> {
+pub async fn pv_aws(size: usize, moves: Vec<String>, nodes: u64, komi: Komi) -> io::Result<Output> {
     let is_white = moves.len() % 2 != 1;
     let event = Event {
         size,
         tps: None,
         moves,
         time_control: TimeControl::FixedNodes(nodes),
-        komi: 0.0,
+        komi: komi.into(),
         dirichlet_noise: None,
         rollout_depth: 0,
         rollout_temperature: 0.2,

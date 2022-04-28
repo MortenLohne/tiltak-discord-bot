@@ -13,9 +13,10 @@ use serenity::framework::standard::{
 };
 use serenity::http::{AttachmentType, Typing};
 use serenity::model::channel::Message;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time;
-use tiltak::position::Position;
+use tiltak::position::{Komi, Position};
 use tiltak::ptn::{Game, PtnMove};
 
 static AWS_FUNCTION_NAME: OnceCell<String> = OnceCell::new();
@@ -193,17 +194,29 @@ async fn analyze_ptn_sized<const S: usize>(
                 return Ok(());
             }
 
-            if let Some(komi) = game.tags.iter().find_map(|(tag, value)| {
-                if tag == "Komi" {
-                    Some(value.clone())
-                } else {
-                    None
-                }
-            }) {
-                if komi != "0" && komi != "0.0" {
-                    msg.reply(ctx, "Note: The game will be analyzed as if it had 0 komi.")
+            let komi_string = game
+                .tags
+                .iter()
+                .find_map(|(tag, value)| {
+                    if tag == "Komi" {
+                        Some(value.clone())
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_else(|| "0".to_string());
+
+            let komi = match Komi::from_str(&komi_string) {
+                Ok(komi) => komi,
+                Err(_) => {
+                    msg.reply(ctx, format!("Couldn't analyze with {} komi", komi_string))
                         .await?;
+                    return Ok(());
                 }
+            };
+
+            if komi != Komi::default() {
+                msg.reply(ctx, "Note: Evaluation only takes komi into account in the endgame").await?;
             }
 
             let typing = Typing::start(ctx.http.clone(), msg.channel_id.0)?;
@@ -215,7 +228,7 @@ async fn analyze_ptn_sized<const S: usize>(
                     .iter()
                     .map(|ptn_move| ptn_move.mv.to_string::<S>())
                     .collect();
-                aws::pv_aws(S, moves, 500_000)
+                aws::pv_aws(S, moves, 500_000, komi)
             });
             let results = futures::future::join_all(futures).await;
 
