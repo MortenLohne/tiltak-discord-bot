@@ -269,7 +269,7 @@ fn process_aws_output<const S: usize>(
 ) -> (Vec<u8>, String, String) {
     let (move_scores, pv_strings): (Vec<f32>, Vec<Vec<String>>) = outputs
         .into_iter()
-        .map(|Output { score, pv }| (score, pv))
+        .map(|Output { score, pv, .. }| (score, pv))
         .unzip();
     let move_annotations = annotate_move_scores(&move_scores);
 
@@ -299,7 +299,7 @@ fn process_aws_output<const S: usize>(
                 comment,
             })
             .collect(),
-        game_result: game.game_result,
+        game_result_str: game.game_result_str,
         tags: game.tags.clone(),
     };
 

@@ -25,10 +25,13 @@ pub struct Event {
     pub rollout_temperature: f64,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Output {
     pub pv: Vec<String>,
     pub score: f32,
+    pub nodes: u64,
+    pub mem_usage: u64,
+    pub time_taken: Duration,
 }
 
 pub async fn pv_aws(size: usize, moves: Vec<String>, nodes: u64) -> io::Result<Output> {
