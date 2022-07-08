@@ -174,26 +174,6 @@ async fn analyze_ptn_sized<const S: usize>(
                 return Ok(());
             }
 
-            if GAMES_ANALYZED.load(Ordering::SeqCst) > MAX_GAMES_ANALYZED {
-                msg.reply(ctx, "Too many games analyzed recently. Try again later.")
-                    .await?;
-                return Ok(());
-            } else {
-                GAMES_ANALYZED.fetch_add(1, Ordering::SeqCst);
-            }
-
-            if CURRENTLY_ANALYZING
-                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                .is_err()
-            {
-                msg.reply(
-                    ctx,
-                    "Cannot analyze two games simultaneously. Try again later.",
-                )
-                .await?;
-                return Ok(());
-            }
-
             let komi_string = game
                 .tags
                 .iter()
@@ -216,7 +196,31 @@ async fn analyze_ptn_sized<const S: usize>(
             };
 
             if komi != Komi::default() {
-                msg.reply(ctx, "Note: Evaluation only takes komi into account in the endgame").await?;
+                msg.reply(
+                    ctx,
+                    "Note: Evaluation only takes komi into account in the endgame",
+                )
+                .await?;
+            }
+
+            if GAMES_ANALYZED.load(Ordering::SeqCst) > MAX_GAMES_ANALYZED {
+                msg.reply(ctx, "Too many games analyzed recently. Try again later.")
+                    .await?;
+                return Ok(());
+            } else {
+                GAMES_ANALYZED.fetch_add(1, Ordering::SeqCst);
+            }
+
+            if CURRENTLY_ANALYZING
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_err()
+            {
+                msg.reply(
+                    ctx,
+                    "Cannot analyze two games simultaneously. Try again later.",
+                )
+                .await?;
+                return Ok(());
             }
 
             let typing = Typing::start(ctx.http.clone(), msg.channel_id.0)?;
