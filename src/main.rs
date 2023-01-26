@@ -40,7 +40,7 @@ impl EventHandler for Handler {}
 #[tokio::main]
 async fn main() {
     let cli_options = cli::parse_cli_options().unwrap();
-    println!("Options: {:?}", cli_options);
+    println!("Options: {cli_options:?}");
 
     AWS_FUNCTION_NAME
         .set(cli_options.aws_function_name)
@@ -66,7 +66,7 @@ async fn main() {
 
     // start listening for events by starting a single shard
     if let Err(why) = client.start().await {
-        println!("An error occurred while running the client: {:?}", why);
+        println!("An error occurred while running the client: {why:?}");
     }
 }
 
@@ -97,8 +97,7 @@ async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
                 Some(5) => analyze_ptn_sized::<5>(ctx, msg, ptn_text).await?,
                 Some(6) => analyze_ptn_sized::<6>(ctx, msg, ptn_text).await?,
                 Some(s) => {
-                    msg.reply(ctx, format!("Size {} is unsupported.", s))
-                        .await?;
+                    msg.reply(ctx, format!("Size {s} is unsupported.")).await?;
                     return Ok(());
                 }
                 None => {
@@ -136,10 +135,7 @@ async fn analyze_tps(ctx: &Context, msg: &Message) -> CommandResult {
         match size {
             0..=3 => msg.reply(ctx, "Couldn't read tps.").await?,
             4..=6 => msg.reply(ctx, "Not implemented yet!").await?,
-            s => {
-                msg.reply(ctx, format!("Size {} is unsupported.", s))
-                    .await?
-            }
+            s => msg.reply(ctx, format!("Size {s} is unsupported.")).await?,
         };
         Ok(())
     } else {
@@ -194,7 +190,7 @@ async fn analyze_ptn_sized<const S: usize>(
             let komi = match Komi::from_str(&komi_string) {
                 Ok(komi) => komi,
                 Err(_) => {
-                    msg.reply(ctx, format!("Couldn't analyze with {} komi", komi_string))
+                    msg.reply(ctx, format!("Couldn't analyze with {komi_string} komi"))
                         .await?;
                     return Ok(());
                 }
@@ -269,7 +265,7 @@ async fn analyze_ptn_sized<const S: usize>(
                             ));
                             m.add_file(AttachmentType::Bytes {
                                 data: file_contents.into(),
-                                filename: format!("{}_vs_{}.txt", white_name, black_name),
+                                filename: format!("{white_name}_vs_{black_name}.txt"),
                             });
                             m
                         })
