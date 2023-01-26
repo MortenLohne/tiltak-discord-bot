@@ -11,8 +11,10 @@ use serenity::framework::standard::{
     macros::{command, group},
     CommandResult, StandardFramework,
 };
-use serenity::http::{AttachmentType, Typing};
+use serenity::http::Typing;
 use serenity::model::channel::Message;
+use serenity::model::prelude::AttachmentType;
+use serenity::prelude::GatewayIntents;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time;
@@ -51,11 +53,14 @@ async fn main() {
     println!("Initialized framework");
 
     // Login with a bot token from the environment
-    let mut client = Client::builder(cli_options.discord_token)
-        .event_handler(Handler)
-        .framework(framework)
-        .await
-        .expect("Error creating client");
+    let mut client = Client::builder(
+        cli_options.discord_token,
+        GatewayIntents::non_privileged().union(GatewayIntents::MESSAGE_CONTENT),
+    )
+    .event_handler(Handler)
+    .framework(framework)
+    .await
+    .expect("Error creating client");
 
     println!("Logged in");
 
@@ -76,7 +81,7 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
     println!("Received {} from {}", msg.content, msg.author.name);
-    if msg.channel(&ctx.cache).await.is_none() {
+    if msg.guild_id.is_none() {
         msg.reply(ctx, "Analysis is only available in specific channels.")
             .await?;
         return Ok(());
@@ -236,7 +241,7 @@ async fn analyze_ptn_sized<const S: usize>(
             });
             let results = futures::future::join_all(futures).await;
 
-            typing.stop();
+            typing.stop().unwrap();
             CURRENTLY_ANALYZING.store(false, Ordering::SeqCst);
 
             // Some trickery to transform Vec<Result<_>> into Result<Vec<_>>
@@ -251,7 +256,7 @@ async fn analyze_ptn_sized<const S: usize>(
                     let (file_contents, white_name, black_name) = process_aws_output(game, outputs);
                     println!("{}", std::str::from_utf8(file_contents.as_slice()).unwrap());
 
-                    let channel = msg.channel(&ctx.cache).await.unwrap();
+                    let channel = msg.channel(&ctx).await.unwrap();
 
                     channel
                         .id()
