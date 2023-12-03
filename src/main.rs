@@ -196,10 +196,24 @@ async fn analyze_ptn_sized<const S: usize>(
                 }
             };
 
-            if komi != Komi::default() {
+            let eval_komi = match (S, komi.half_komi()) {
+                (4, ..=3) => Komi::from_half_komi(0).unwrap(),
+                (4, 4..) => Komi::from_half_komi(8).unwrap(),
+                (5, ..=1) => Komi::from_half_komi(0).unwrap(),
+                (5, 2..) => Komi::from_half_komi(4).unwrap(),
+                (6, ..=1) => Komi::from_half_komi(0).unwrap(),
+                (6, 2..) => Komi::from_half_komi(4).unwrap(),
+                (_, _) => {
+                    msg.reply(ctx, format!("Size {S} with komi {komi} is unsupported."))
+                        .await?;
+                    return Ok(());
+                }
+            };
+
+            if komi != eval_komi {
                 msg.reply(
                     ctx,
-                    "Note: Evaluation only takes komi into account in the endgame",
+                    format!("Note: {komi} komi on {S}s is not fully supported. Until the endgame, the game will be evaluated as if it had {eval_komi} komi."),
                 )
                 .await?;
             }
@@ -233,7 +247,7 @@ async fn analyze_ptn_sized<const S: usize>(
                     .iter()
                     .map(|ptn_move| ptn_move.mv.to_string::<S>())
                     .collect();
-                aws::pv_aws(S, moves, 500_000, komi)
+                aws::pv_aws(S, moves, 500_000, komi, eval_komi)
             });
             let results = futures::future::join_all(futures).await;
 
