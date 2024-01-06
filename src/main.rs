@@ -111,6 +111,17 @@ async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
                 }
             };
             Ok(())
+        } else if let Some(tps_line) = ptn_text.lines().find(|line| line.contains("TPS")) {
+            match tps_line.chars().filter(|ch| *ch == '/').count() + 1 {
+                4 => analyze_ptn_sized::<4>(ctx, msg, ptn_text).await?,
+                5 => analyze_ptn_sized::<5>(ctx, msg, ptn_text).await?,
+                6 => analyze_ptn_sized::<6>(ctx, msg, ptn_text).await?,
+                s => {
+                    msg.reply(ctx, format!("Size {s} is unsupported.")).await?;
+                    return Ok(());
+                }
+            };
+            Ok(())
         } else {
             msg.reply(
                 ctx,
