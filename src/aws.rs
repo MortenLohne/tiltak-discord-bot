@@ -38,6 +38,7 @@ pub struct Output {
 
 pub async fn pv_aws(
     size: usize,
+    tps: Option<String>,
     moves: Vec<String>,
     nodes: u64,
     komi: Komi,
@@ -46,7 +47,7 @@ pub async fn pv_aws(
     let is_white = moves.len() % 2 != 1;
     let event = Event {
         size,
-        tps: None,
+        tps,
         moves,
         time_control: TimeControl::FixedNodes(nodes),
         komi: komi.into(),

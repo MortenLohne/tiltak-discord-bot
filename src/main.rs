@@ -5,6 +5,7 @@ use crate::aws::Output;
 use board_game_traits::Position as PositionTrait;
 use log::warn;
 use once_cell::sync::OnceCell;
+use pgn_traits::PgnPosition;
 use serenity::async_trait;
 use serenity::client::{Client, Context, EventHandler};
 use serenity::framework::standard::{
@@ -163,11 +164,6 @@ async fn analyze_ptn_sized<const S: usize>(
                 return Ok(());
             }
             let game = &games[0];
-            if game.start_position != Position::start_position() {
-                msg.reply(ctx, "Cannot analyze games with a custom start position.")
-                    .await?;
-                return Ok(());
-            }
 
             if game.moves.len() > 200 {
                 msg.reply(ctx, "Game length cannot exceed 100 moves.")
@@ -247,7 +243,13 @@ async fn analyze_ptn_sized<const S: usize>(
                     .iter()
                     .map(|ptn_move| ptn_move.mv.to_string::<S>())
                     .collect();
-                aws::pv_aws(S, moves, 500_000, komi, eval_komi)
+
+                let tps = if game.start_position != Position::start_position() {
+                    Some(game.start_position.to_fen())
+                } else {
+                    None
+                };
+                aws::pv_aws(S, tps, moves, 500_000, komi, eval_komi)
             });
             let results = futures::future::join_all(futures).await;
 
