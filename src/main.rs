@@ -1,5 +1,6 @@
 mod aws;
 mod cli;
+mod eval_graph;
 
 use crate::aws::Output;
 use board_game_traits::Position as PositionTrait;
@@ -279,6 +280,8 @@ async fn analyze_ptn_sized<const S: usize>(
                     let (file_contents, white_name, black_name) = process_aws_output(game, outputs);
                     println!("{}", std::str::from_utf8(file_contents.as_slice()).unwrap());
 
+                    let graph = eval_graph::generate_graph(&file_contents);
+
                     let channel = msg.channel(&ctx).await.unwrap();
 
                     channel
@@ -294,6 +297,17 @@ async fn analyze_ptn_sized<const S: usize>(
                                 data: file_contents.into(),
                                 filename: format!("{white_name}_vs_{black_name}.txt"),
                             });
+                            match graph {
+                                Ok(graph) => {
+                                    m.add_file(AttachmentType::Bytes {
+                                        data: graph.into(),
+                                        filename: format!("{white_name}_vs_{black_name}.png"),
+                                    });
+                                }
+                                Err(err) => {
+                                    warn!("Failed to render eval graph: {}", err)
+                                }
+                            }
                             m
                         })
                         .await?;

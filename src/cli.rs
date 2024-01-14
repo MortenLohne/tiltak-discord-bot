@@ -5,6 +5,7 @@ use std::io;
 pub struct CliOptions {
     pub aws_function_name: String,
     pub discord_token: String,
+    generate_eval_graph: bool,
 }
 
 pub fn parse_cli_options() -> io::Result<CliOptions> {
@@ -32,6 +33,12 @@ pub fn parse_cli_options() -> io::Result<CliOptions> {
                 .help("Discord login token")
                 .required(true)
                 .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("generate-eval-graph")
+            .long("generate-graph")
+            .long("Generate and send a png of the evaluation graph throughout the game. Requires Python3 + dependencies installed on the system")
+            .takes_value(false)
         );
     let matches = app.get_matches();
 
@@ -70,5 +77,6 @@ pub fn parse_cli_options() -> io::Result<CliOptions> {
     Ok(CliOptions {
         aws_function_name: matches.value_of("aws-function-name").unwrap().to_string(),
         discord_token: matches.value_of("discord-token").unwrap().to_string(),
+        generate_eval_graph: matches.is_present("generate-eval-graph"),
     })
 }
