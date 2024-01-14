@@ -332,7 +332,7 @@ fn process_aws_output<const S: usize>(
         moves: game
             .moves
             .iter()
-            .zip(move_annotations.into_iter())
+            .zip(move_annotations)
             .zip(comments)
             .map(|((ptn_move, annotation), comment)| PtnMove {
                 mv: ptn_move.mv.clone(),
