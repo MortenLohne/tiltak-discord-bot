@@ -11,7 +11,7 @@ WIDTH_PER_PLY = 0.2
 evals = np.array(
     [
         (float(match) / 100)
-        for match in re.findall("(\d\d.\d)%", sys.stdin.read())
+        for match in re.findall("(\d?\d\d.\d)%", sys.stdin.read())
     ]
 )
 plies = evals.size
