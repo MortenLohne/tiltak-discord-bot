@@ -277,8 +277,20 @@ async fn analyze_ptn_sized<const S: usize>(
                     Err("AWS error".into())
                 }
                 Ok(outputs) => {
+                    let slowest_output = outputs
+                        .iter()
+                        .cloned()
+                        .max_by_key(|output| output.time_taken)
+                        .unwrap_or_default();
                     let (file_contents, white_name, black_name) = process_aws_output(game, outputs);
                     println!("{}", std::str::from_utf8(file_contents.as_slice()).unwrap());
+
+                    println!(
+                        "{:.1}s taken total, {:.1}s taken for slowest pv {:?}",
+                        start_time.elapsed().as_secs_f32(),
+                        slowest_output.time_taken.as_secs_f32(),
+                        slowest_output.pv
+                    );
 
                     let graph = eval_graph::generate_graph(&file_contents);
 
