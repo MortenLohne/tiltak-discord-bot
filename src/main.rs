@@ -99,7 +99,8 @@ async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
                 Some(5) => analyze_ptn_sized::<5>(ctx, msg, ptn_text).await?,
                 Some(6) => analyze_ptn_sized::<6>(ctx, msg, ptn_text).await?,
                 Some(s) => {
-                    msg.reply(ctx, format!("Size {s} is unsupported.")).await?;
+                    msg.reply(ctx, format!("Size {s} is not supported."))
+                        .await?;
                     return Ok(());
                 }
                 None => {
@@ -204,18 +205,9 @@ async fn analyze_ptn_sized<const S: usize>(
                 }
             };
 
-            let eval_komi = match (S, komi.half_komi()) {
-                (4, ..=3) => Komi::from_half_komi(0).unwrap(),
-                (4, 4..) => Komi::from_half_komi(8).unwrap(),
-                (5, ..=1) => Komi::from_half_komi(0).unwrap(),
-                (5, 2..) => Komi::from_half_komi(4).unwrap(),
-                (6, ..=1) => Komi::from_half_komi(0).unwrap(),
-                (6, 2..) => Komi::from_half_komi(4).unwrap(),
-                (_, _) => {
-                    msg.reply(ctx, format!("Size {S} with komi {komi} is unsupported."))
-                        .await?;
-                    return Ok(());
-                }
+            let eval_komi = match komi.half_komi() {
+                ..=1 => Komi::from_half_komi(0).unwrap(),
+                2.. => Komi::from_half_komi(4).unwrap(),
             };
 
             if komi != eval_komi {
