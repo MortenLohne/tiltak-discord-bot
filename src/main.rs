@@ -253,7 +253,7 @@ async fn analyze_ptn_sized<const S: usize>(
                 } else {
                     None
                 };
-                aws::pv_aws(S, tps, moves, 500_000, komi, eval_komi)
+                aws::pv_aws(S, tps, moves, 1_000_000, komi, eval_komi)
             });
             let results = futures::future::join_all(futures).await;
 
