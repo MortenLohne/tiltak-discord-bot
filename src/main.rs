@@ -19,14 +19,15 @@ use serenity::model::channel::Message;
 use serenity::model::prelude::AttachmentType;
 use serenity::prelude::GatewayIntents;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time;
 use tiltak::position::{Komi, Position};
 use tiltak::ptn::{Game, PtnMove};
+use tokio::sync::Semaphore;
 
 static AWS_FUNCTION_NAME: OnceCell<String> = OnceCell::new();
 
-static CURRENTLY_ANALYZING: AtomicBool = AtomicBool::new(false);
+static CURRENTLY_ANALYZING: Semaphore = Semaphore::const_new(2);
 
 static GAMES_ANALYZED: AtomicUsize = AtomicUsize::new(0);
 const MAX_GAMES_ANALYZED: usize = 200;
@@ -286,17 +287,14 @@ async fn analyze_ptn_sized<const S: usize>(
                 GAMES_ANALYZED.fetch_add(1, Ordering::SeqCst);
             }
 
-            if CURRENTLY_ANALYZING
-                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                .is_err()
-            {
+            let Ok(_permit) = CURRENTLY_ANALYZING.try_acquire() else {
                 msg.reply(
                     ctx,
-                    "Cannot analyze two games simultaneously. Try again later.",
+                    "Cannot analyze more than two games simultaneously. Try again later.",
                 )
                 .await?;
                 return Ok(());
-            }
+            };
 
             let typing = Typing::start(ctx.http.clone(), msg.channel_id.0)?;
 
@@ -318,7 +316,6 @@ async fn analyze_ptn_sized<const S: usize>(
             let results = futures::future::join_all(futures).await;
 
             typing.stop().unwrap();
-            CURRENTLY_ANALYZING.store(false, Ordering::SeqCst);
 
             // Some trickery to transform Vec<Result<_>> into Result<Vec<_>>
             let result_results: Result<Vec<_>, _> = results.into_iter().collect();
@@ -413,7 +410,7 @@ fn process_aws_output<const S: usize>(
             .zip(move_annotations)
             .zip(comments)
             .map(|((ptn_move, annotation), comment)| PtnMove {
-                mv: ptn_move.mv.clone(),
+                mv: ptn_move.mv,
                 annotations: if annotation.is_empty() {
                     vec![]
                 } else {
