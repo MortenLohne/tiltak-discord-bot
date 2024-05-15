@@ -7,6 +7,7 @@ use board_game_traits::Position as PositionTrait;
 use log::warn;
 use once_cell::sync::OnceCell;
 use pgn_traits::PgnPosition;
+use reqwest::StatusCode;
 use serenity::async_trait;
 use serenity::client::{Client, Context, EventHandler};
 use serenity::framework::standard::{
@@ -88,52 +89,111 @@ async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
             .await?;
         return Ok(());
     }
-    if let Some((_, ptn_text)) = msg.content.split_once(|ch: char| ch.is_whitespace()) {
-        if let Some(size_line) = ptn_text.lines().find(|line| line.contains("Size")) {
-            match size_line
-                .split_whitespace()
-                .nth(1)
-                .and_then(|r| r.chars().nth(1).and_then(|r| r.to_digit(10)))
-            {
-                Some(4) => analyze_ptn_sized::<4>(ctx, msg, ptn_text).await?,
-                Some(5) => analyze_ptn_sized::<5>(ctx, msg, ptn_text).await?,
-                Some(6) => analyze_ptn_sized::<6>(ctx, msg, ptn_text).await?,
-                Some(s) => {
-                    msg.reply(ctx, format!("Size {s} is not supported."))
-                        .await?;
-                    return Ok(());
-                }
-                None => {
-                    msg.reply(
-                        ctx,
-                        "Invalid Size tag. The PTN must include a tag such as [Size \"6\"].",
-                    )
-                    .await?;
-                    return Ok(());
-                }
-            };
-            Ok(())
-        } else if let Some(tps_line) = ptn_text.lines().find(|line| line.contains("TPS")) {
-            match tps_line.chars().filter(|ch| *ch == '/').count() + 1 {
-                4 => analyze_ptn_sized::<4>(ctx, msg, ptn_text).await?,
-                5 => analyze_ptn_sized::<5>(ctx, msg, ptn_text).await?,
-                6 => analyze_ptn_sized::<6>(ctx, msg, ptn_text).await?,
-                s => {
-                    msg.reply(ctx, format!("Size {s} is unsupported.")).await?;
-                    return Ok(());
-                }
-            };
-            Ok(())
-        } else {
+    if let Some(game_id) = msg
+        .content
+        .split_whitespace()
+        .nth(1)
+        .and_then(|word| word.parse::<usize>().ok())
+    {
+        let Ok(ptn_response) = reqwest::get(format!(
+            "https://api.playtak.com/v1/games-history/ptn/{}",
+            game_id
+        ))
+        .await
+        else {
             msg.reply(
                 ctx,
-                "Couldn't determine board size. The PTN must include a tag such as [Size \"6\"].",
+                format!(
+                    "Failed to fetch PTN for game #{} from Playtak server",
+                    game_id
+                ),
             )
             .await?;
-            Ok(())
+            return Ok(());
+        };
+        if ptn_response.status() == StatusCode::NOT_FOUND {
+            msg.reply(
+                ctx,
+                format!(
+                    "Game #{} not found on Playtak. Was the game id correct?",
+                    game_id
+                ),
+            )
+            .await?;
+            return Ok(());
+        } else if !ptn_response.status().is_success() {
+            msg.reply(
+                ctx,
+                format!(
+                    "Error: Got http {} when fetching PTN from Playtak",
+                    ptn_response.status()
+                ),
+            )
+            .await?;
+            return Ok(());
         }
+        let Ok(ptn_text) = ptn_response.text().await else {
+            msg.reply(
+                ctx,
+                format!(
+                    "Error fetching PTN for game #{} from Playtak server",
+                    game_id
+                ),
+            )
+            .await?;
+            return Ok(());
+        };
+        analyze_ptn_unsized(ctx, msg, &ptn_text).await
+    } else if let Some((_, ptn_text)) = msg.content.split_once(|ch: char| ch.is_whitespace()) {
+        analyze_ptn_unsized(ctx, msg, ptn_text).await
     } else {
         msg.reply(ctx, "No PTN provided.").await?;
+        Ok(())
+    }
+}
+
+async fn analyze_ptn_unsized(ctx: &Context, msg: &Message, ptn_text: &str) -> CommandResult {
+    if let Some(size_line) = ptn_text.lines().find(|line| line.contains("Size")) {
+        match size_line
+            .split_whitespace()
+            .nth(1)
+            .and_then(|r| r.chars().nth(1).and_then(|r| r.to_digit(10)))
+        {
+            Some(4) => analyze_ptn_sized::<4>(ctx, msg, ptn_text).await?,
+            Some(5) => analyze_ptn_sized::<5>(ctx, msg, ptn_text).await?,
+            Some(6) => analyze_ptn_sized::<6>(ctx, msg, ptn_text).await?,
+            Some(s) => {
+                msg.reply(ctx, format!("Size {s} is not supported."))
+                    .await?;
+                return Ok(());
+            }
+            None => {
+                msg.reply(
+                    ctx,
+                    "Invalid Size tag. The PTN must include a tag such as [Size \"6\"].",
+                )
+                .await?;
+                return Ok(());
+            }
+        };
+        Ok(())
+    } else if let Some(tps_line) = ptn_text.lines().find(|line| line.contains("TPS")) {
+        match tps_line.chars().filter(|ch| *ch == '/').count() + 1 {
+            4 => analyze_ptn_sized::<4>(ctx, msg, ptn_text).await?,
+            5 => analyze_ptn_sized::<5>(ctx, msg, ptn_text).await?,
+            6 => analyze_ptn_sized::<6>(ctx, msg, ptn_text).await?,
+            s => {
+                msg.reply(ctx, format!("Size {s} is unsupported.")).await?;
+                return Ok(());
+            }
+        };
+        Ok(())
+    } else {
+        msg.reply(
+            ctx,
+            "Couldn't determine board size. The PTN must include a tag such as [Size \"6\"].",
+        )
+        .await?;
         Ok(())
     }
 }
