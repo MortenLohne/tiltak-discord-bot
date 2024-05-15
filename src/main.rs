@@ -245,7 +245,7 @@ async fn analyze_ptn_sized<const S: usize>(
             let futures = (0..=game.moves.len()).map(|i| {
                 let moves = game.moves[0..i]
                     .iter()
-                    .map(|ptn_move| ptn_move.mv.to_string::<S>())
+                    .map(|ptn_move| ptn_move.mv.to_string())
                     .collect();
 
                 let tps = if game.start_position != Position::start_position() {

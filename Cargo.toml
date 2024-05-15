@@ -12,8 +12,8 @@ fern = "0.6"
 chrono = "0.4"
 log = "0.4"
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
-board-game-traits = "0.3"
-pgn-traits = "0.4.1"
+board-game-traits = "0.4"
+pgn-traits = "0.5.0"
 tiltak = { git = "https://github.com/MortenLohne/tiltak", features = ["serde"] }
 serde = "1"
 serde_json = "1"
