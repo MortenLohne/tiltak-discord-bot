@@ -239,8 +239,8 @@ async fn analyze_ptn_sized<const S: usize>(
             }
             let game = &games[0];
 
-            if game.moves.len() > 200 {
-                msg.reply(ctx, "Game length cannot exceed 100 moves.")
+            if game.moves.len() > 240 {
+                msg.reply(ctx, "Game length cannot exceed 120 moves.")
                     .await?;
                 return Ok(());
             }
