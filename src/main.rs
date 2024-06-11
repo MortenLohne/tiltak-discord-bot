@@ -496,9 +496,14 @@ fn annotate_move_scores(move_scores: &[f32]) -> Vec<&'static str> {
 }
 
 fn create_ptn_ninja_url(ptn: &str) -> reqwest::Url {
+    let compressed_ptn = compress_to_encoded_uri_component(ptn);
+    // escape `+` (and possibly other characters) as it seems like they are not
+    // correctly handled by everyone, e.g. some URL shorteners
+    let compressed_ptn = urlencoding::encode(&compressed_ptn);
+
     let ptn_ninja_base_url = reqwest::Url::parse("https://ptn.ninja").unwrap();
     ptn_ninja_base_url
-        .join(&compress_to_encoded_uri_component(ptn))
+        .join(&compressed_ptn)
         .unwrap()
 }
 
