@@ -5,6 +5,7 @@ mod eval_graph;
 use crate::aws::Output;
 use board_game_traits::Position as PositionTrait;
 use log::warn;
+use lz_str::compress_to_encoded_uri_component;
 use once_cell::sync::OnceCell;
 use pgn_traits::PgnPosition;
 use reqwest::StatusCode;
@@ -24,6 +25,9 @@ use std::time;
 use tiltak::position::{Komi, Position};
 use tiltak::ptn::{Game, PtnMove};
 use tokio::sync::Semaphore;
+use tokio::task::spawn_blocking;
+use urlshortener::client::UrlShortener;
+use urlshortener::providers::{Provider, ProviderError};
 
 static AWS_FUNCTION_NAME: OnceCell<String> = OnceCell::new();
 
@@ -332,7 +336,8 @@ async fn analyze_ptn_sized<const S: usize>(
                         .max_by_key(|output| output.time_taken)
                         .unwrap_or_default();
                     let (file_contents, white_name, black_name) = process_aws_output(game, outputs);
-                    println!("{}", std::str::from_utf8(file_contents.as_slice()).unwrap());
+                    let annotated_game = std::str::from_utf8(file_contents.as_slice()).unwrap();
+                    println!("{}", annotated_game);
 
                     println!(
                         "{:.1}s taken total, {:.1}s taken for slowest pv {:?}",
@@ -345,14 +350,22 @@ async fn analyze_ptn_sized<const S: usize>(
 
                     let channel = msg.channel(&ctx).await.unwrap();
 
+                    let ptn_ninja_url = create_ptn_ninja_url(annotated_game);
+                    let short_ptn_ninja_url = shorten_url(ptn_ninja_url).await;
+                    let ptn_ninja_ref = match short_ptn_ninja_url {
+                        Ok(url) => format!("[ptn.ninja]({})", url),
+                        _ => "ptn.ninja".into(),
+                    };
+
                     channel
                         .id()
                         .send_message(&ctx.http, |m| {
                             m.content(format!(
-                                "Finished analyzing {} vs {} in {:.1}s. Best viewed in ptn.ninja!",
+                                "Finished analyzing {} vs {} in {:.1}s. Best viewed in {}!",
                                 white_name,
                                 black_name,
-                                start_time.elapsed().as_secs_f32()
+                                start_time.elapsed().as_secs_f32(),
+                                ptn_ninja_ref,
                             ));
                             m.add_file(AttachmentType::Bytes {
                                 data: file_contents.into(),
@@ -480,4 +493,21 @@ fn annotate_move_scores(move_scores: &[f32]) -> Vec<&'static str> {
             }
         })
         .collect()
+}
+
+fn create_ptn_ninja_url(ptn: &str) -> reqwest::Url {
+    let ptn_ninja_base_url = reqwest::Url::parse("https://ptn.ninja").unwrap();
+    ptn_ninja_base_url
+        .join(&compress_to_encoded_uri_component(ptn))
+        .unwrap()
+}
+
+async fn shorten_url(long_url: reqwest::Url) -> Result<String, ProviderError> {
+    spawn_blocking(move || {
+        UrlShortener::new()
+            .unwrap()
+            .generate(long_url, &Provider::BitUrl)
+    })
+    .await
+    .unwrap()
 }

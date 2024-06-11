@@ -933,6 +933,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
 
 [[package]]
+name = "lz-str"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39f3d72d77227090eed75ea331285a53726e78374a1f357ff5757702c23c70cc"
+
+[[package]]
 name = "md-5"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1331,6 +1337,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "encoding_rs",
+ "futures-channel",
  "futures-core",
  "futures-util",
  "h2 0.4.4",
@@ -1940,6 +1947,7 @@ dependencies = [
  "fern",
  "futures",
  "log",
+ "lz-str",
  "once_cell",
  "pgn-traits",
  "reqwest 0.12.4",
@@ -1950,6 +1958,7 @@ dependencies = [
  "serenity",
  "tiltak",
  "tokio",
+ "urlshortener",
 ]
 
 [[package]]
@@ -2228,6 +2237,16 @@ dependencies = [
  "idna",
  "percent-encoding",
  "serde",
+]
+
+[[package]]
+name = "urlshortener"
+version = "3.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e7800d67708bc6638bb0db0e6725168793d9863ff1c43812708cfee6cfecfb6"
+dependencies = [
+ "reqwest 0.12.4",
+ "url",
 ]
 
 [[package]]
