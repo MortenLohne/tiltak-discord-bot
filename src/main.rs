@@ -8,6 +8,7 @@ use log::warn;
 use once_cell::sync::OnceCell;
 use pgn_traits::PgnPosition;
 use reqwest::StatusCode;
+use serde::Serialize;
 use serenity::async_trait;
 use serenity::client::{Client, Context, EventHandler};
 use serenity::framework::standard::{
@@ -332,7 +333,8 @@ async fn analyze_ptn_sized<const S: usize>(
                         .max_by_key(|output| output.time_taken)
                         .unwrap_or_default();
                     let (file_contents, white_name, black_name) = process_aws_output(game, outputs);
-                    println!("{}", std::str::from_utf8(file_contents.as_slice()).unwrap());
+                    let annotated_game = std::str::from_utf8(file_contents.as_slice()).unwrap();
+                    println!("{}", annotated_game);
 
                     println!(
                         "{:.1}s taken total, {:.1}s taken for slowest pv {:?}",
@@ -345,14 +347,22 @@ async fn analyze_ptn_sized<const S: usize>(
 
                     let channel = msg.channel(&ctx).await.unwrap();
 
+                    let short_ptn_ninja_url = create_short_ptn_ninja_url(annotated_game).await;
+                    let ptn_ninja_ref = match short_ptn_ninja_url {
+                        // wrap URL in `<...>` to prevent discord preview
+                        Ok(url) => format!("[ptn.ninja](<{}>)", url),
+                        _ => "ptn.ninja".into(),
+                    };
+
                     channel
                         .id()
                         .send_message(&ctx.http, |m| {
                             m.content(format!(
-                                "Finished analyzing {} vs {} in {:.1}s. Best viewed in ptn.ninja!",
+                                "Finished analyzing {} vs {} in {:.1}s. Best viewed in {}!",
                                 white_name,
                                 black_name,
-                                start_time.elapsed().as_secs_f32()
+                                start_time.elapsed().as_secs_f32(),
+                                ptn_ninja_ref,
                             ));
                             m.add_file(AttachmentType::Bytes {
                                 data: file_contents.into(),
@@ -480,4 +490,24 @@ fn annotate_move_scores(move_scores: &[f32]) -> Vec<&'static str> {
             }
         })
         .collect()
+}
+
+#[derive(Serialize)]
+struct UrlPtnNinjaRequest {
+    ptn: String,
+    // params: optional key/value pairs to configure ptn.ninja style
+}
+
+async fn create_short_ptn_ninja_url(ptn: &str) -> Result<String, reqwest::Error> {
+    let request = UrlPtnNinjaRequest{ ptn: ptn.to_string() };
+    let client = reqwest::Client::new();
+    let res = client.post("https://url.ptn.ninja/short")
+    .json(&request)
+    .send()
+    .await?;
+
+    match res.error_for_status() {
+        Ok(res) => res.text().await,
+        Err(err) => Err(err)
+    }
 }
