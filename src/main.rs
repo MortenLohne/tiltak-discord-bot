@@ -5,10 +5,10 @@ mod eval_graph;
 use crate::aws::Output;
 use board_game_traits::Position as PositionTrait;
 use log::warn;
-use lz_str::compress_to_encoded_uri_component;
 use once_cell::sync::OnceCell;
 use pgn_traits::PgnPosition;
 use reqwest::StatusCode;
+use serde::Serialize;
 use serenity::async_trait;
 use serenity::client::{Client, Context, EventHandler};
 use serenity::framework::standard::{
@@ -25,9 +25,6 @@ use std::time;
 use tiltak::position::{Komi, Position};
 use tiltak::ptn::{Game, PtnMove};
 use tokio::sync::Semaphore;
-use tokio::task::spawn_blocking;
-use urlshortener::client::UrlShortener;
-use urlshortener::providers::{Provider, ProviderError};
 
 static AWS_FUNCTION_NAME: OnceCell<String> = OnceCell::new();
 
@@ -350,8 +347,7 @@ async fn analyze_ptn_sized<const S: usize>(
 
                     let channel = msg.channel(&ctx).await.unwrap();
 
-                    let ptn_ninja_url = create_ptn_ninja_url(annotated_game);
-                    let short_ptn_ninja_url = shorten_url(ptn_ninja_url).await;
+                    let short_ptn_ninja_url = create_short_ptn_ninja_url(annotated_game).await;
                     let ptn_ninja_ref = match short_ptn_ninja_url {
                         Ok(url) => format!("[ptn.ninja]({})", url),
                         _ => "ptn.ninja".into(),
@@ -495,24 +491,22 @@ fn annotate_move_scores(move_scores: &[f32]) -> Vec<&'static str> {
         .collect()
 }
 
-fn create_ptn_ninja_url(ptn: &str) -> reqwest::Url {
-    let compressed_ptn = compress_to_encoded_uri_component(ptn);
-    // escape `+` (and possibly other characters) as it seems like they are not
-    // correctly handled by everyone, e.g. some URL shorteners
-    let compressed_ptn = urlencoding::encode(&compressed_ptn);
-
-    let ptn_ninja_base_url = reqwest::Url::parse("https://ptn.ninja").unwrap();
-    ptn_ninja_base_url
-        .join(&compressed_ptn)
-        .unwrap()
+#[derive(Serialize)]
+struct UrlPtnNinjaRequest {
+    ptn: String,
+    // params: optional key/value pairs to configure ptn.ninja style
 }
 
-async fn shorten_url(long_url: reqwest::Url) -> Result<String, ProviderError> {
-    spawn_blocking(move || {
-        UrlShortener::new()
-            .unwrap()
-            .generate(long_url, &Provider::BitUrl)
-    })
-    .await
-    .unwrap()
+async fn create_short_ptn_ninja_url(ptn: &str) -> Result<String, reqwest::Error> {
+    let request = UrlPtnNinjaRequest{ ptn: ptn.to_string() };
+    let client = reqwest::Client::new();
+    let res = client.post("https://url.ptn.ninja/short")
+    .json(&request)
+    .send()
+    .await?;
+
+    match res.error_for_status() {
+        Ok(res) => res.text().await,
+        Err(err) => Err(err)
+    }
 }
