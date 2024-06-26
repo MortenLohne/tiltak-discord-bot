@@ -349,7 +349,8 @@ async fn analyze_ptn_sized<const S: usize>(
 
                     let short_ptn_ninja_url = create_short_ptn_ninja_url(annotated_game).await;
                     let ptn_ninja_ref = match short_ptn_ninja_url {
-                        Ok(url) => format!("[ptn.ninja]({})", url),
+                        // wrap URL in `<...>` to prevent discord preview
+                        Ok(url) => format!("[ptn.ninja](<{}>)", url),
                         _ => "ptn.ninja".into(),
                     };
 
