@@ -502,15 +502,18 @@ struct UrlPtnNinjaRequest {
 }
 
 async fn create_short_ptn_ninja_url(ptn: &str) -> Result<String, reqwest::Error> {
-    let request = UrlPtnNinjaRequest{ ptn: ptn.to_string() };
+    let request = UrlPtnNinjaRequest {
+        ptn: ptn.to_string(),
+    };
     let client = reqwest::Client::new();
-    let res = client.post("https://url.ptn.ninja/short")
-    .json(&request)
-    .send()
-    .await?;
+    let res = client
+        .post("https://url.ptn.ninja/short")
+        .json(&request)
+        .send()
+        .await?;
 
     match res.error_for_status() {
         Ok(res) => res.text().await,
-        Err(err) => Err(err)
+        Err(err) => Err(err),
     }
 }
