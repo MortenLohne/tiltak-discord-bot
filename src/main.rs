@@ -348,21 +348,24 @@ async fn analyze_ptn_sized<const S: usize>(
                     let channel = msg.channel(&ctx).await.unwrap();
 
                     let short_ptn_ninja_url = create_short_ptn_ninja_url(annotated_game).await;
-                    let ptn_ninja_ref = match short_ptn_ninja_url {
+                    let ptn_ninja_message = match short_ptn_ninja_url {
                         // wrap URL in `<...>` to prevent discord preview
-                        Ok(url) => format!("[ptn.ninja](<{}>)", url),
-                        _ => "ptn.ninja".into(),
+                        Ok(url) => format!("[View game in ptn.ninja](<{}>).", url),
+                        Err(err) => {
+                            warn!("Error shortening ptn.ninja URL: {}", err);
+                            "Best viewed in ptn.ninja!".to_string()
+                        }
                     };
 
                     channel
                         .id()
                         .send_message(&ctx.http, |m| {
                             m.content(format!(
-                                "Finished analyzing {} vs {} in {:.1}s. Best viewed in {}!",
+                                "Finished analyzing {} vs {} in {:.1}s. {}",
                                 white_name,
                                 black_name,
                                 start_time.elapsed().as_secs_f32(),
-                                ptn_ninja_ref,
+                                ptn_ninja_message,
                             ));
                             m.add_file(AttachmentType::Bytes {
                                 data: file_contents.into(),
