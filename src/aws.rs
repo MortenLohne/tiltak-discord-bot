@@ -41,6 +41,7 @@ pub async fn pv_aws(
     tps: Option<String>,
     moves: Vec<String>,
     nodes: u64,
+    rollout_depth: u16,
     komi: Komi,
     eval_komi: Komi,
 ) -> io::Result<Output> {
@@ -53,7 +54,7 @@ pub async fn pv_aws(
         komi: komi.into(),
         eval_komi: Some(eval_komi.into()),
         dirichlet_noise: None,
-        rollout_depth: 0,
+        rollout_depth,
         rollout_temperature: 0.2,
     };
     let client = LambdaClient::new(Region::UsEast2);
