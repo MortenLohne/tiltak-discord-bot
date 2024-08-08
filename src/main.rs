@@ -11,6 +11,7 @@ use reqwest::StatusCode;
 use serde::Serialize;
 use serenity::async_trait;
 use serenity::client::{Client, Context, EventHandler};
+use serenity::framework::standard::Args;
 use serenity::framework::standard::{
     macros::{command, group},
     CommandResult, StandardFramework,
@@ -34,7 +35,7 @@ static GAMES_ANALYZED: AtomicUsize = AtomicUsize::new(0);
 const MAX_GAMES_ANALYZED: usize = 200;
 
 #[group]
-#[commands(analyze_ptn, analyze_tps, ping)]
+#[commands(analyze_ptn, analyze_ptn_slatebot, analyze_tps, ping)]
 struct General;
 
 struct Handler;
@@ -81,6 +82,12 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
     msg.reply(ctx, "Pong!").await?;
 
     Ok(())
+}
+
+// This command analysis with slatebot, meaning full MCTS rollouts, but a much lower node count
+#[command]
+async fn analyze_ptn_slatebot(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    analyze_ptn(ctx, msg, args).await
 }
 
 #[command]
@@ -312,7 +319,16 @@ async fn analyze_ptn_sized<const S: usize>(
                 } else {
                     None
                 };
-                aws::pv_aws(S, tps, moves, 1_000_000, komi, eval_komi)
+                if msg.content.starts_with("!analyze_ptn_slatebot") {
+                    aws::pv_aws(S, tps, moves, 200_000, 1000, komi, eval_komi)
+                } else if msg.content.starts_with("!analyze_ptn") {
+                    aws::pv_aws(S, tps, moves, 1_000_000, 0, komi, eval_komi)
+                } else {
+                    panic!(
+                        "Failed to parse command {}",
+                        msg.content.split_whitespace().next().unwrap_or_default()
+                    )
+                }
             });
             let results = futures::future::join_all(futures).await;
 
