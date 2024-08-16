@@ -348,15 +348,21 @@ async fn analyze_ptn_sized<const S: usize>(
                         .cloned()
                         .max_by_key(|output| output.time_taken)
                         .unwrap_or_default();
+                    let highest_memory_usage = outputs
+                        .iter()
+                        .cloned()
+                        .max_by_key(|output| output.mem_usage)
+                        .unwrap_or_default();
                     let (file_contents, white_name, black_name) = process_aws_output(game, outputs);
                     let annotated_game = std::str::from_utf8(file_contents.as_slice()).unwrap();
                     println!("{}", annotated_game);
 
                     println!(
-                        "{:.1}s taken total, {:.1}s taken for slowest pv {:?}",
+                        "{:.1}s taken total, {:.1}s taken for slowest pv {:?}, {:.1}MiB for largest tree",
                         start_time.elapsed().as_secs_f32(),
                         slowest_output.time_taken.as_secs_f32(),
-                        slowest_output.pv
+                        slowest_output.pv,
+                        highest_memory_usage.mem_usage as f32 / (1024.0 * 1024.0),
                     );
 
                     let graph = eval_graph::generate_graph(&file_contents);
