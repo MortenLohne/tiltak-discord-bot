@@ -104,6 +104,7 @@ async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
         .nth(1)
         .and_then(|word| word.parse::<usize>().ok())
     {
+        let start_time = time::Instant::now();
         let Ok(ptn_response) = reqwest::get(format!(
             "https://api.playtak.com/v1/games-history/ptn/{}",
             game_id
@@ -141,6 +142,10 @@ async fn analyze_ptn(ctx: &Context, msg: &Message) -> CommandResult {
             .await?;
             return Ok(());
         }
+        println!(
+            "Fetched ptn from Playtak in {:.2}s",
+            start_time.elapsed().as_secs_f32()
+        );
         let Ok(ptn_text) = ptn_response.text().await else {
             msg.reply(
                 ctx,
@@ -365,11 +370,22 @@ async fn analyze_ptn_sized<const S: usize>(
                         highest_memory_usage.mem_usage as f32 / (1024.0 * 1024.0),
                     );
 
+                    let graph_start_time = time::Instant::now();
                     let graph = eval_graph::generate_graph(&file_contents);
+                    println!(
+                        "Rendered graph in {:.2}s",
+                        graph_start_time.elapsed().as_secs_f32()
+                    );
 
                     let channel = msg.channel(&ctx).await.unwrap();
 
+                    let url_start_time = time::Instant::now();
                     let short_ptn_ninja_url = create_short_ptn_ninja_url(annotated_game).await;
+                    println!(
+                        "Got shortened URL in {:.2}s",
+                        url_start_time.elapsed().as_secs_f32()
+                    );
+
                     let ptn_ninja_message = match short_ptn_ninja_url {
                         // wrap URL in `<...>` to prevent discord preview
                         Ok(url) => format!("[View game in ptn.ninja](<{}>).", url),
