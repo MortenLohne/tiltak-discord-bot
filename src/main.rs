@@ -258,6 +258,50 @@ async fn analyze_ptn_sized<const S: usize>(
                 return Ok(());
             }
 
+            if let Some((_, flat_str)) = games[0].tags.iter().find(|(tag, _)| tag == "Flats") {
+                let expected_flats = Position::<S>::start_position().white_reserves_left();
+                if *flat_str != expected_flats.to_string() {
+                    msg.reply(
+                        ctx,
+                        format!(
+                            "Can only analyze {}s games if they have the standard {} flats",
+                            S, expected_flats
+                        ),
+                    )
+                    .await?;
+                    return Ok(());
+                }
+            }
+
+            if let Some((_, caps_str)) = games[0].tags.iter().find(|(tag, _)| tag == "Caps") {
+                let expected_caps = Position::<S>::start_position().white_caps_left();
+                if *caps_str != expected_caps.to_string() {
+                    msg.reply(
+                        ctx,
+                        format!(
+                            "Can only analyze {}s games if they have the standard {} caps",
+                            S, expected_caps
+                        ),
+                    )
+                    .await?;
+                    return Ok(());
+                }
+            }
+
+            if games[0]
+                .tags
+                .iter()
+                .find(|(tag, _)| tag == "Opening")
+                .is_some_and(|(_, opening)| opening != "swap")
+            {
+                msg.reply(
+                    ctx,
+                    "Can only analyze games with the standard swap opening rule",
+                )
+                .await?;
+                return Ok(());
+            }
+
             let komi_string = game
                 .tags
                 .iter()
